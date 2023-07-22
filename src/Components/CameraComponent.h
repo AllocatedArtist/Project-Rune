@@ -6,18 +6,25 @@
 #include <glm/mat4x4.hpp>
 
 struct CameraComponent {
-  float fov_;
-  float near_;
-  float far_;
+  float fov_ = 90.f;
+  float near_ = 0.1f;
+  float far_ = 100.f;
 
-  glm::vec3 position_;
-  glm::vec3 forward_;
-  glm::vec3 right_;
-  glm::vec3 up_;
+  glm::vec3 position_ = glm::vec3(0.0);
+  glm::vec3 forward_ = glm::vec3(0.0, 0.0, -1.0);
+  glm::vec3 right_ = glm::vec3(1.0, 0.0, 0.0);
+  glm::vec3 up_ = glm::vec3(0.0, 1.0, 0.0);
 
   glm::vec2 aspect_ratio_;
-  glm::mat4 view_;
-  glm::mat4 projection_;
+  glm::mat4 view_ = glm::mat4(1.0);
+  glm::mat4 projection_ = glm::mat4(1.0);
+};
+
+struct FlyCameraComponent {
+  float sensitivity_;
+  float speed_;
+  float yaw_;
+  float pitch_;
 };
 
 #endif
