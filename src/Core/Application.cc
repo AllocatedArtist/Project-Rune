@@ -10,6 +10,11 @@
 
 #include "Input.h"
 
+float Application::delta_time_ = 0.f;
+float Application::last_time_ = 0.f;
+
+static bool first_mouse_move = false;
+
 Application::Application(const int& width, const int& height, const char* window_title) {
 
   //Clear contents of file
@@ -60,6 +65,24 @@ Application::Application(const int& width, const int& height, const char* window
     }
   });
 
+  glfwSetCursorPosCallback(window_, [](GLFWwindow* window, double xpos, double ypos) {
+    if (!first_mouse_move) {
+      first_mouse_move = true;
+      Input::SetMouseStateX(xpos);
+      Input::SetMouseStateY(ypos);
+    }
+
+    float last_x = Input::GetMouseX();
+    float last_y = Input::GetMouseY();
+
+    Input::SetMouseStateDeltaX(static_cast<float>(xpos) - last_x);
+    Input::SetMouseStateDeltaY(last_y - static_cast<float>(ypos));
+
+    Input::SetMouseStateX(static_cast<float>(xpos));
+    Input::SetMouseStateY(static_cast<float>(ypos));
+    Input::SetMouseMoving(true);
+  });
+
   int glad_result = gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress));
 
   if (!glad_result) {
@@ -100,14 +123,59 @@ Application& Application::AddSystem(const SystemType& type, const std::function<
 
 void Application::Run() {
   std::for_each(start_functions_.cbegin(), start_functions_.cend(), [](const auto& fn) { fn(); });
+  PLOG_DEBUG << "Start functions finished";
 
   while (!glfwWindowShouldClose(window_)) {
     glfwPollEvents();
+
+    switch (Input::GetCursorState()) {
+      case Input::CursorState::kCursorStateNormal:
+        glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        break;
+      case Input::CursorState::kCursorStateHidden:
+        glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+        break;
+      case Input::CursorState::kCursorStateDisabled:
+        glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        break;
+    }
+
+    float current_time = GetElapsedTime();
+    delta_time_ = current_time - last_time_;
+    last_time_ = current_time;
+
     std::for_each(update_functions_.cbegin(), update_functions_.cend(), [](const auto& fn) { fn(); });
     glfwSwapBuffers(window_);
   }
+  PLOG_DEBUG << "Update functions finished";
 
   std::for_each(end_functions_.cbegin(), end_functions_.cend(), [](const auto& fn) { fn(); });
+  PLOG_DEBUG << "End functions finished";
+}
+
+void Application::Quit() {
+  glfwSetWindowShouldClose(window_, GLFW_TRUE);
+}
+
+
+int Application::GetWindowWidth() {
+  int width = 0;
+  glfwGetWindowSize(window_, &width, nullptr);
+  return width;
+}
+
+int Application::GetWindowHeight() {
+  int height = 0;
+  glfwGetWindowSize(window_, nullptr, &height);
+  return height;
+}
+
+float Application::GetElapsedTime() {
+  return static_cast<float>(glfwGetTime());
+}
+
+float Application::GetDeltaTime() {
+  return delta_time_;
 }
 
 
