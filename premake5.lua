@@ -8,6 +8,8 @@ workspace "Project Rune"
     "vendor/glm",
     "vendor",
     "vendor/entt/single_include",
+    "vendor/imgui",
+    "vendor/imgui/misc",
   }
 
 project "Project-Rune"
@@ -15,6 +17,7 @@ project "Project-Rune"
   language "C++"
   cppdialect "C++17"
   targetdir "bin/%{cfg.buildcfg}"
+  toolset "gcc"
 
   libdirs "libs"
   links { 
@@ -22,8 +25,11 @@ project "Project-Rune"
     "gdi32",
   }
 
-
   files { 
+    "vendor/imgui/*.cpp",
+    "vendor/imgui/backends/imgui_impl_opengl3.cpp",
+    "vendor/imgui/backends/imgui_impl_glfw.cpp",
+    "vendor/imgui/misc/cpp/*.cpp",
     "vendor/glad/src/*.cc",
     "vendor/stb/*.cc",
     "src/**.cc" 
