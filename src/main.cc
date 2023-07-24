@@ -10,6 +10,7 @@
 #include "Graphics/Buffer.h"
 #include "Graphics/Shader.h"
 #include "Graphics/Texture.h"
+#include "Graphics/ModelLoader.h"
 
 #include "Components/MeshComponent.h"
 #include "Components/TextureComponent.h"
@@ -17,16 +18,18 @@
 #include "Components/InputComponent.h"
 #include "Components/CameraComponent.h"
 #include "Components/TransformComponent.h"
-
 #include "Components/Components.h"
 
 #include "Gui/ImGui_Backend.h"
+
 
 struct {
   Application app_ = Application(1600, 1480, "Project Rune");
   entt::registry registry_;
   entt::entity textured_rec_;
   entt::entity camera_;
+  std::vector<entt::entity> model_entity;
+  Model model;
 } Core;
 
 void Setup_Buffers() {
@@ -60,7 +63,7 @@ void Setup_Buffers() {
   ebo->Unbind();
 
   std::shared_ptr<Texture> texture = std::make_shared<Texture>();
-  texture->Create().Load("../../assets/smiley.png", true);
+  texture->Create().Load("../../assets/smiley.png", false);
 
   std::shared_ptr<Shader> shader = std::make_shared<Shader>("../../assets/shader.glsl");
   texture->BindSlot(0);
@@ -76,6 +79,19 @@ void Setup_Buffers() {
   Core.registry_.emplace<MeshComponent>(Core.textured_rec_, vao, vbo, ebo, 4, 6);
   Core.registry_.emplace<TextureComponent>(Core.textured_rec_, texture);
   Core.registry_.emplace<ShaderComponent>(Core.textured_rec_, shader); 
+
+  for (Mesh& mesh : Core.model.GetMeshes()) {
+    for (Primitive& p : mesh.primitives_) {
+      auto primitive = Core.registry_.create();
+      Core.registry_.emplace<MeshComponent>(primitive, p.vertex_array_, p.vertex_buffer_, p.index_buffer_, 0, p.indices_count_, p.component_type_, p.draw_mode_, mesh.transform_);
+      TransformComponent transform;
+      transform.position_ = glm::vec3(0.f, 0.f, -5.f);
+      Core.registry_.emplace<TransformComponent>(primitive, transform);
+      Core.registry_.emplace<TextureComponent>(primitive, texture);
+      Core.registry_.emplace<ShaderComponent>(primitive, shader);
+      Core.model_entity.push_back(primitive);
+    }
+  }
 
   TransformComponent transform;
   transform.position_ = glm::vec3(0.0, 0.0, 0.0);
@@ -99,6 +115,8 @@ void Setup_Buffers() {
   Core.registry_.emplace<CameraComponent>(Core.camera_, camera_component);
 
   Input::SetCursorState(Input::CursorState::kCursorStateDisabled);
+
+  glEnable(GL_DEPTH_TEST);
 }
 
 void DrawUI(void) {
@@ -112,7 +130,7 @@ void DrawUI(void) {
 }
 
 void ClearBackgroundColor(void) {
-  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   glClearColor(0.95, 0.75, 0.75, 1.0); 
 
   if (Input::IsKeyPressed(GLFW_KEY_ESCAPE)) {
@@ -129,11 +147,17 @@ void ClearBackgroundColor(void) {
       Input::SetCursorState(Input::CursorState::kCursorStateDisabled);
     }
   }
+
+  for (auto e : Core.model_entity) {
+    auto& t = Core.registry_.get<TransformComponent>(e);
+    t.rotation_ = glm::rotate(t.rotation_, Application::GetDeltaTime(), glm::vec3(1.f, 1.f, 0.f));
+  }
 }
 
 int main(void) {
   Core.app_
     .AddSystem(Application::SystemType::kSystemStart, ImGui_Backend::Start)
+    .AddSystem(Application::SystemType::kSystemStart, [](){ Core.model.LoadModel("../../assets/better.gltf"); })
     .AddSystem(Application::SystemType::kSystemStart, Setup_Buffers)
     .AddSystem(Application::SystemType::kSystemUpdate, ImGui_Backend::NewFrame)
     .AddSystem(Application::SystemType::kSystemUpdate, DrawUI)
