@@ -24,5 +24,4 @@ struct MeshComponent {
   TransformComponent local_transform_;
 };
 
-
 #endif
