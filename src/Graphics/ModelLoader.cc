@@ -1,6 +1,9 @@
 #include "ModelLoader.h"
 
+#include <glad/glad.h>
 #include <plog/Log.h>
+
+std::map<std::string, std::shared_ptr<Texture>> Model::texture_cache_;
 
 static void LogPrimitiveMode(const int& mode) {
   if (mode == 0)
@@ -80,14 +83,19 @@ void Model::ProcessNodes(const tinygltf::Node& node, const tinygltf::Model& mode
 
   Mesh new_mesh;
   new_mesh.primitives_ = ProcessMesh(model.meshes[node.mesh], model);
-  
-  new_mesh.transform_.position_ = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
-  PLOGD << node.rotation.size();
+ 
+  if (node.translation.size() != 0.f) {
+    assert(node.translation.size() == 3 && "Translation size not 3!");
+    new_mesh.transform_.position_ = glm::vec3(node.translation[0], node.translation[1], node.translation[2]);
+  }
   if (node.rotation.size() != 0.f) {
-    assert(node.rotation.size() == 4);
+    assert(node.rotation.size() == 4 && "Rotation size is not 4!");
     new_mesh.transform_.rotation_ = glm::quat(node.rotation[3], node.rotation[0], node.rotation[1], node.rotation[2]);
   }
-  new_mesh.transform_.scale_ = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+  if (node.scale.size() != 0.f) {
+    assert(node.scale.size() && "Scale size not 3!");
+    new_mesh.transform_.scale_ = glm::vec3(node.scale[0], node.scale[1], node.scale[2]);
+  }
 
   meshes_.push_back(new_mesh);
 
@@ -164,6 +172,55 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
     PLOGD << primitive_data.indices_.size();
     PLOGD << "------END------";
 
+    const tinygltf::Material& material = model.materials[primitive.material];
+    assert(material.pbrMetallicRoughness.baseColorTexture.index > -1 && "No base texture");
+    const tinygltf::Texture& base_texture = model.textures[material.pbrMetallicRoughness.baseColorTexture.index];
+    const tinygltf::Image& image = model.images[base_texture.source]; 
+ 
+    std::shared_ptr<Texture> current_texture;
+    if (auto image_it = texture_cache_.find(image.name); image_it != texture_cache_.end()) {
+      PLOGD << "Using texture cache for: " << image_it->first;
+      current_texture = image_it->second; 
+    } else {
+      if (model.textures.size() > 0) {
+        const tinygltf::Sampler& sampler = model.samplers[base_texture.sampler];
+
+        unsigned int texture;
+
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sampler.wrapS);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, sampler.wrapT);
+      
+        GLenum format = GL_RGB;
+        if (image.component == 1) 
+          format = GL_RED;
+        else if (image.component == 2) 
+          format = GL_RG;
+        else if (image.component == 3)
+          format = GL_RGB;
+        else if (image.component == 4) 
+          format = GL_RGBA;
+        else
+          PLOGD << "Unknown component: " << image.component;
+      
+        GLenum bits = GL_UNSIGNED_BYTE;
+        if (image.bits == 16)
+          bits = GL_UNSIGNED_SHORT;
+        else if (image.bits == 8)
+          bits = GL_UNSIGNED_BYTE;
+        else 
+          PLOGD << "UNKNOWN BITS: " << image.bits;
+      
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, format, bits, &image.image.at(0));
+        current_texture = std::make_shared<Texture>(texture);
+        texture_cache_.insert(std::make_pair(image.name, current_texture));
+      } 
+    }
+
+    primitive_data.texture_ = current_texture;
     primitives.push_back(primitive_data); 
   }
 
@@ -194,6 +251,8 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
     primitive.component_type_ = data.component_type_;
     primitive.indices_count_ = data.indices_count_;
 
+    primitive.texture_ = data.texture_;
+
     processed_primitives.push_back(primitive);
   }
 
@@ -218,3 +277,6 @@ void Model::LoadModel(const std::string& filename) {
 std::vector<Mesh>& Model::GetMeshes() {
   return meshes_;
 }
+
+
+

@@ -2,10 +2,14 @@
 #define MODEL_LOADER_H_
 
 #include <tinygltf/tiny_gltf.h>
+
 #include <memory>
 
 #include "../Components/TransformComponent.h"
+#include "../Components/TextureComponent.h"
+#include "../Components/MeshComponent.h"
 
+#include "Texture.h"
 #include "VertexArray.h"
 #include "Buffer.h"
 
@@ -17,6 +21,7 @@ struct PrimitiveData {
   int indices_count_;
   int draw_mode_;
   int component_type_;
+  std::shared_ptr<Texture> texture_;
 };
 
 struct Primitive {
@@ -26,6 +31,7 @@ struct Primitive {
   int indices_count_;
   int draw_mode_;
   int component_type_; //GL_UNSIGNED_SHORT or GL_UNSIGNED_INT?
+  std::shared_ptr<Texture> texture_;
 };
 
 struct Mesh {
@@ -43,6 +49,8 @@ private:
   std::vector<Primitive> ProcessMesh(const tinygltf::Mesh& mesh, const tinygltf::Model& model); 
 private:
   std::vector<Mesh> meshes_;
+private:
+  static std::map<std::string, std::shared_ptr<Texture>> texture_cache_;
 };
 
 #endif
