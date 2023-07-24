@@ -10,6 +10,7 @@ workspace "Project Rune"
     "vendor/entt/single_include",
     "vendor/imgui",
     "vendor/imgui/misc",
+    "vendor/tinygltf",
   }
 
 project "Project-Rune"
@@ -26,6 +27,7 @@ project "Project-Rune"
   }
 
   files { 
+    "vendor/tinygltf/tiny_gltf.cc",
     "vendor/imgui/*.cpp",
     "vendor/imgui/backends/imgui_impl_opengl3.cpp",
     "vendor/imgui/backends/imgui_impl_glfw.cpp",
@@ -33,6 +35,9 @@ project "Project-Rune"
     "vendor/glad/src/*.cc",
     "vendor/stb/*.cc",
     "src/**.cc" 
+  }
+
+  defines { 
   }
 
   filter "configurations:Debug"
