@@ -4,6 +4,7 @@
 class Texture {
 public:
   Texture() = default;
+  Texture(const unsigned int& texture);
   ~Texture();
 
   Texture& Create();

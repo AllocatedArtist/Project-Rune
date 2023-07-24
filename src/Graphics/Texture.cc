@@ -65,6 +65,12 @@ void Texture::Unbind() {
   glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+Texture::Texture(const unsigned int& texture) {
+  PLOGD << "ASSIGNED TEXTURE";
+  texture_ = texture;
+}
+
+
 
 
 
