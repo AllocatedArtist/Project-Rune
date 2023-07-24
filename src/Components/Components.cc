@@ -7,6 +7,7 @@
 
 #include "CameraComponent.h"
 #include "MeshComponent.h"
+#include "ModelComponent.h"
 #include "ShaderComponent.h"
 #include "TextureComponent.h"
 #include "TransformComponent.h"
@@ -77,6 +78,45 @@ void UpdateCameraComponents(entt::registry& registry, const glm::vec2& aspect_ra
 
 void UpdateMeshComponents(entt::registry& registry) {
   auto view = registry.view<const MeshComponent, ShaderComponent>();
+  auto model_view = registry.view<const ModelComponent, ShaderComponent>();
+
+  for (auto [entity, model_component, shader_component] : model_view.each()) {
+    for (const Mesh& mesh : model_component.meshes_) {
+      for (const Primitive& primitive : mesh.primitives_) {
+        primitive.vertex_array_->Bind();
+        shader_component.shader_->Bind();
+
+        if (primitive.texture_ != nullptr)
+          primitive.texture_->BindSlot(0);
+        
+        glm::mat4 model_transform(1.0);
+
+        if (registry.any_of<TransformComponent>(entity)) {
+          auto transform = registry.get<TransformComponent>(entity);
+          model_transform = glm::translate(model_transform, transform.position_);
+          model_transform = model_transform * glm::mat4(transform.rotation_);
+          model_transform = glm::scale(model_transform, transform.scale_);
+        }
+
+        glm::mat4 local_matrix(1.0);
+        local_matrix = glm::translate(local_matrix, mesh.transform_.position_);
+        local_matrix = local_matrix * glm::mat4(mesh.transform_.rotation_);
+        local_matrix = glm::scale(local_matrix, mesh.transform_.scale_);
+
+        shader_component.shader_->SetUniform_Matrix("model", model_transform * local_matrix); 
+        shader_component.shader_->SetUniform_Matrix("viewProjection", Global.current_view_projection_);
+ 
+        if (primitive.index_buffer_ > 0) {
+          glDrawElements(primitive.draw_mode_, primitive.indices_count_, primitive.component_type_, 0);
+        } else {
+          glDrawArrays(primitive.draw_mode_, 0, 0);
+        }
+
+        shader_component.shader_->Unbind();
+        primitive.vertex_array_->Unbind();
+      }
+    }
+  }
 
   for (auto entity : view) {
     auto mesh = registry.get<MeshComponent>(entity);
@@ -87,7 +127,9 @@ void UpdateMeshComponents(entt::registry& registry) {
 
     if (registry.any_of<TextureComponent>(entity)) {
       auto texture = registry.get<TextureComponent>(entity);
-      texture.texture_->BindSlot(0);
+      if (texture.texture_ != nullptr) {
+        texture.texture_->BindSlot(0);
+      }
     }
 
     glm::mat4 model_transform(1.0);
