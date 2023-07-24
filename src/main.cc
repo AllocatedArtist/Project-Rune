@@ -12,6 +12,7 @@
 #include "Graphics/Texture.h"
 #include "Graphics/ModelLoader.h"
 
+#include "Components/ModelComponent.h"
 #include "Components/MeshComponent.h"
 #include "Components/TextureComponent.h"
 #include "Components/ShaderComponent.h"
@@ -42,8 +43,8 @@ void Setup_Buffers() {
   };
 
   unsigned short indices[] = {
-    0, 1, 2,
-    2, 3, 0,
+    2, 1, 0,
+    3, 2, 0,
   };
 
   std::shared_ptr<VertexArray> vao = std::make_shared<VertexArray>();
@@ -63,35 +64,44 @@ void Setup_Buffers() {
   ebo->Unbind();
 
   std::shared_ptr<Texture> texture = std::make_shared<Texture>();
-  texture->Create().Load("../../assets/smiley.png", false);
+  texture->Create().Load("../../assets/smiley.png", true);
 
   std::shared_ptr<Shader> shader = std::make_shared<Shader>("../../assets/shader.glsl");
-  texture->BindSlot(0);
   shader->Bind();
   shader->LoadUniform("texture0").SetUniform_Int("texture0", 0);
   shader->LoadUniform("model");
   shader->LoadUniform("viewProjection");
 
   shader->Unbind();
-  texture->Unbind();
 
   Core.textured_rec_ = Core.registry_.create();
   Core.registry_.emplace<MeshComponent>(Core.textured_rec_, vao, vbo, ebo, 4, 6);
   Core.registry_.emplace<TextureComponent>(Core.textured_rec_, texture);
   Core.registry_.emplace<ShaderComponent>(Core.textured_rec_, shader); 
 
-  for (Mesh& mesh : Core.model.GetMeshes()) {
-    for (Primitive& p : mesh.primitives_) {
-      auto primitive = Core.registry_.create();
-      Core.registry_.emplace<MeshComponent>(primitive, p.vertex_array_, p.vertex_buffer_, p.index_buffer_, 0, p.indices_count_, p.component_type_, p.draw_mode_, mesh.transform_);
-      TransformComponent transform;
-      transform.position_ = glm::vec3(0.f, 0.f, -5.f);
-      Core.registry_.emplace<TransformComponent>(primitive, transform);
-      Core.registry_.emplace<TextureComponent>(primitive, texture);
-      Core.registry_.emplace<ShaderComponent>(primitive, shader);
-      Core.model_entity.push_back(primitive);
-    }
-  }
+  TransformComponent better_t;
+  better_t.position_ = glm::vec3(0.f, 0.f, -5.f);
+
+  TransformComponent grass_t;
+  grass_t.position_ = glm::vec3(2.f, 1.f, -0.5f);
+  grass_t.scale_ = glm::vec3(0.3f, 0.3f, 0.3f);
+
+
+  entt::entity e = Core.registry_.create();
+  Core.registry_.emplace<ModelComponent>(e, "../../assets/better.gltf");
+  Core.registry_.emplace<TransformComponent>(e, better_t);
+  Core.registry_.emplace<ShaderComponent>(e, shader);
+
+  Core.model_entity.push_back(e);
+
+  entt::entity e2 = Core.registry_.create();
+  Core.registry_.emplace<ModelComponent>(e2, "../../assets/grassblock.gltf");
+  Core.registry_.emplace<TransformComponent>(e2, grass_t);
+  Core.registry_.emplace<ShaderComponent>(e2, shader);
+
+  Core.model_entity.push_back(e2);
+
+  
 
   TransformComponent transform;
   transform.position_ = glm::vec3(0.0, 0.0, 0.0);
@@ -111,12 +121,13 @@ void Setup_Buffers() {
   camera_component.up_ = glm::vec3(0.f, 1.f, 0.f);
 
   Core.registry_.emplace<InputComponent>(Core.camera_);
-  Core.registry_.emplace<FlyCameraComponent>(Core.camera_, 0.1f, 1.0f);
+  Core.registry_.emplace<FlyCameraComponent>(Core.camera_, 0.2f, 1.0f);
   Core.registry_.emplace<CameraComponent>(Core.camera_, camera_component);
 
   Input::SetCursorState(Input::CursorState::kCursorStateDisabled);
 
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
 }
 
 void DrawUI(void) {
@@ -148,16 +159,16 @@ void ClearBackgroundColor(void) {
     }
   }
 
-  for (auto e : Core.model_entity) {
-    auto& t = Core.registry_.get<TransformComponent>(e);
-    t.rotation_ = glm::rotate(t.rotation_, Application::GetDeltaTime(), glm::vec3(1.f, 1.f, 0.f));
+  for (int i = 0; i < Core.model_entity.size(); ++i) {
+    auto& t = Core.registry_.get<TransformComponent>(Core.model_entity[i]);
+    t.rotation_ = glm::rotate(t.rotation_, (i % 2 == 0) ? Application::GetDeltaTime() : -Application::GetDeltaTime(), glm::vec3(1.f, 1.f, 0.f));
   }
 }
 
 int main(void) {
   Core.app_
     .AddSystem(Application::SystemType::kSystemStart, ImGui_Backend::Start)
-    .AddSystem(Application::SystemType::kSystemStart, [](){ Core.model.LoadModel("../../assets/better.gltf"); })
+    .AddSystem(Application::SystemType::kSystemStart, [](){ Core.model.LoadModel("../../assets/better.gltf"); PLOGD << "MODEL LOADED"; })
     .AddSystem(Application::SystemType::kSystemStart, Setup_Buffers)
     .AddSystem(Application::SystemType::kSystemUpdate, ImGui_Backend::NewFrame)
     .AddSystem(Application::SystemType::kSystemUpdate, DrawUI)
