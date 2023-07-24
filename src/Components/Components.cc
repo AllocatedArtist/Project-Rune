@@ -99,15 +99,21 @@ void UpdateMeshComponents(entt::registry& registry) {
       model_transform = glm::scale(model_transform, transform.scale_);
     }
 
-    shader.shader_->SetUniform_Matrix("model", model_transform);
+    glm::mat4 local_matrix(1.0);
+    local_matrix = glm::translate(local_matrix, mesh.local_transform_.position_);
+    local_matrix = local_matrix * glm::mat4(mesh.local_transform_.rotation_);
+    local_matrix = glm::scale(local_matrix, mesh.local_transform_.scale_);
+
+
+    shader.shader_->SetUniform_Matrix("model", model_transform * local_matrix);
  
     shader.shader_->SetUniform_Matrix("viewProjection", Global.current_view_projection_);
  
     if (mesh.index_buffer_ > 0) {
-      glDrawElements(GL_TRIANGLES, mesh.num_indices_, GL_UNSIGNED_SHORT, 0);
+      glDrawElements(mesh.draw_mode_, mesh.num_indices_, mesh.index_type_, 0);
     }
     else {
-      glDrawArrays(GL_TRIANGLES, mesh.num_vertices_, 0);
+      glDrawArrays(mesh.draw_mode_, mesh.num_vertices_, 0);
     }
 
     shader.shader_->Unbind();
