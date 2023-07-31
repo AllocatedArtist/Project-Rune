@@ -13,7 +13,7 @@
 #include "TransformComponent.h"
 #include "InputComponent.h"
 
-#include "../Core/Application.h"
+#include "../Core/Time.h"
 #include "../Core/Input.h"
 
 struct {
@@ -55,7 +55,7 @@ void UpdateCameraComponents(entt::registry& registry, const glm::vec2& aspect_ra
 
     if (movement_dir != glm::vec3(0.f)) {
       movement_dir = glm::normalize(movement_dir);
-      camera.position_ += movement_dir * fly_camera.speed_ * Application::GetDeltaTime();
+      camera.position_ += movement_dir * fly_camera.speed_ * static_cast<float>(Time::GetDeltaTime());
     }
 
     if (Input::IsMouseMoving()) {
