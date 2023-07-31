@@ -11,6 +11,7 @@ workspace "Project Rune"
     "vendor/imgui",
     "vendor/imgui/misc",
     "vendor/tinygltf",
+    "vendor/bullet",
   }
 
 project "Project-Rune"
@@ -24,6 +25,10 @@ project "Project-Rune"
   links { 
     "glfw3",
     "gdi32",
+    "BulletDynamics",
+    "BulletCollision",
+    "LinearMath",
+    "Bullet3Common",
   }
 
   files { 
