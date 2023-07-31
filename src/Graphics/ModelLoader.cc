@@ -189,8 +189,8 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
 
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sampler.wrapS);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, sampler.wrapT);
       
@@ -215,6 +215,7 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
           PLOGD << "UNKNOWN BITS: " << image.bits;
       
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, format, bits, &image.image.at(0));
+        glGenerateMipmap(GL_TEXTURE_2D);
         current_texture = std::make_shared<Texture>(texture);
         texture_cache_.insert(std::make_pair(image.name, current_texture));
       } 

@@ -7,11 +7,18 @@
 #include <plog/Initializers/RollingFileInitializer.h>
 
 #include <fstream>
+#include <thread>
+#include <chrono>
 
 #include "Input.h"
+#include "Time.h"
 
-float Application::delta_time_ = 0.f;
-float Application::last_time_ = 0.f;
+double Application::last_time_ = 0.0;
+double Application::current_time_ = 0.0;
+double Application::update_time_ = 0.0;
+double Application::draw_time_ = 0.0;
+
+double Application::target_fps_ = 120.0;
 
 static bool first_mouse_move = false;
 
@@ -93,6 +100,8 @@ Application::Application(const int& width, const int& height, const char* window
   
   glViewport(0, 0, width, height);
 
+  current_time_ = glfwGetTime();
+
   PLOG_DEBUG << "Initialized successfully";
 }
 
@@ -126,8 +135,6 @@ void Application::Run() {
   PLOG_DEBUG << "Start functions finished";
 
   while (!glfwWindowShouldClose(window_)) {
-    glfwPollEvents();
-
     switch (Input::GetCursorState()) {
       case Input::CursorState::kCursorStateNormal:
         glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -140,12 +147,34 @@ void Application::Run() {
         break;
     }
 
-    float current_time = GetElapsedTime();
-    delta_time_ = current_time - last_time_;
-    last_time_ = current_time;
-
+    current_time_ = glfwGetTime();
+    update_time_ = current_time_ - last_time_;
+    last_time_ = current_time_;
+ 
+    
     std::for_each(update_functions_.cbegin(), update_functions_.cend(), [](const auto& fn) { fn(); });
+
     glfwSwapBuffers(window_);
+
+    current_time_ = glfwGetTime();
+    draw_time_ = current_time_ - last_time_;
+    last_time_ = current_time_;
+
+    double delta_time = update_time_ + draw_time_;
+    Time::SetDeltaTime(delta_time);
+
+    if (Time::GetDeltaTime() < target_fps_) {
+      double destination_time = glfwGetTime() + (target_fps_ - Time::GetDeltaTime());
+      while (glfwGetTime() < destination_time) {}
+      current_time_ = glfwGetTime();
+      double wait_time = current_time_ - last_time_;
+      last_time_ = current_time_;
+
+      delta_time += wait_time;
+      Time::SetDeltaTime(delta_time);
+    }
+
+    glfwPollEvents();
   }
   PLOG_DEBUG << "Update functions finished";
 
@@ -170,13 +199,14 @@ int Application::GetWindowHeight() {
   return height;
 }
 
-float Application::GetElapsedTime() {
-  return static_cast<float>(glfwGetTime());
+void Application::SetTargetFPS(int target_fps) {
+  if (target_fps == 0) {
+    target_fps_ = 0.0;
+    return;
+  }
+  target_fps_ = 1.0 / static_cast<double>(target_fps);
 }
 
-float Application::GetDeltaTime() {
-  return delta_time_;
-}
 
 
 

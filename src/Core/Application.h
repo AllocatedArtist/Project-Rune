@@ -23,8 +23,8 @@ public:
 public:
   int GetWindowWidth();
   int GetWindowHeight();
-  static float GetElapsedTime();
-  static float GetDeltaTime();
+  
+  static void SetTargetFPS(int target_fps);
 private:
   struct GLFWwindow* window_; 
 
@@ -32,8 +32,13 @@ private:
   std::vector<std::function<void(void)>> update_functions_;
   std::vector<std::function<void(void)>> end_functions_;
 private:
-  static float delta_time_;
-  static float last_time_;
+  static double current_time_;
+  static double last_time_;
+
+  static double update_time_;
+  static double draw_time_;
+
+  static double target_fps_;
 };
 
 #endif
