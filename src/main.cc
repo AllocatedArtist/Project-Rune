@@ -7,12 +7,19 @@
 #include "Core/Time.h"
 #include "Core/Input.h"
 
+#include "Core/MapLoader.h"
+
 #include "Graphics/VertexArray.h"
 #include "Graphics/Buffer.h"
 #include "Graphics/Shader.h"
 #include "Graphics/Texture.h"
 #include "Graphics/ModelLoader.h"
 
+#include "Graphics/DebugDrawer.h"
+
+#include "Components/RigidBodyComponent.h"
+#include "Components/BoxColliderComponent.h"
+#include "Components/SphereColliderComponent.h"
 #include "Components/ModelComponent.h"
 #include "Components/MeshComponent.h"
 #include "Components/TextureComponent.h"
@@ -24,18 +31,23 @@
 
 #include "Gui/ImGui_Backend.h"
 
-#include <btBulletDynamicsCommon.h>
+#include "Physics/PhysicsWorld.h"
+#include "Physics/PhysicsMath.h"
+
 
 struct {
   Application app_ = Application(1600, 1480, "Project Rune");
   entt::registry registry_;
   entt::entity camera_;
   std::vector<entt::entity> model_entity;
-  std::shared_ptr<btDefaultCollisionConfiguration> physics_config = std::make_shared<btDefaultCollisionConfiguration>(); 
-  std::shared_ptr<btCollisionDispatcher> physics_dispatcher = std::make_shared<btCollisionDispatcher>(physics_config.get());
-  std::shared_ptr<btBroadphaseInterface> physics_broadphase = std::make_shared<btDbvtBroadphase>();
-  std::shared_ptr<btSequentialImpulseConstraintSolver> physics_solver = std::make_shared<btSequentialImpulseConstraintSolver>(); 
-  std::shared_ptr<btDiscreteDynamicsWorld> physics_world = std::make_shared<btDiscreteDynamicsWorld>(physics_dispatcher.get(), physics_broadphase.get(), physics_solver.get(), physics_config.get());
+  PhysicsWorld physics_world;
+
+  ModelComponent ball_model_;
+  SphereColliderComponent sphere_component_;
+
+  std::shared_ptr<Shader> default_shader_;
+
+  MapLoader level_;
 } Core;
 
 void Setup_Buffers() {
@@ -95,12 +107,25 @@ void Setup_Buffers() {
   glEnable(GL_CULL_FACE);
 }
 
+struct {
+  bool draw_debug_ = false;
+} UI;
+
 void DrawUI(void) {
   if (ImGui::Begin("My Window", nullptr, ImGuiWindowFlags_NoResize)) {
     ImGui::SetWindowSize(ImVec2(300.f, 300.f));
     ImGui::SetWindowFontScale(2.4f);
     ImGui::Text("Frames: %.3f ms", 1000.0f / ImGui::GetIO().Framerate);
     ImGui::Text("FPS: %.2f", ImGui::GetIO().Framerate);
+
+    if (ImGui::Checkbox("Debug Draw", &UI.draw_debug_)) {
+      if (UI.draw_debug_) {
+        Core.physics_world.EnableDebug();
+      } else {
+        DebugDrawer::FlushSquares();
+        Core.physics_world.DisableDebug();
+      }
+    }
   }
   ImGui::End();
 }
@@ -128,124 +153,135 @@ void ClearBackgroundColor(void) {
     auto& t = Core.registry_.get<TransformComponent>(Core.model_entity[i]);
     float delta = static_cast<float>(Time::GetDeltaTime());
     t.rotation_ = glm::rotate(t.rotation_, (i % 2 == 0) ? delta : -delta, glm::vec3(1.f, 1.f, 0.f));
-  }
+  } 
 }
 
-struct {
-  std::vector<std::shared_ptr<btCollisionShape>> shapes_;
-  std::vector<std::shared_ptr<btMotionState>> motion_;
-  std::vector<std::shared_ptr<btRigidBody>> bodies_;
-
-  entt::entity physics_cube;
-} PhysicsDemo;
-
-void Setup_Physics(void) {
-  Core.physics_world->setGravity(btVector3(0.f, -9.8f, 0.f));
+void Setup_PhysicsDemo() {
 
   std::shared_ptr<Shader> shader = std::make_shared<Shader>("../../assets/shader.glsl");
-  shader->Bind();
   shader->LoadUniform("texture0").SetUniform_Int("texture0", 0);
   shader->LoadUniform("model").LoadUniform("viewProjection");
-  shader->Unbind();
+  shader->LoadUniform("fragBaseColor");
+
+  Core.default_shader_ = shader;
+
+  entt::entity floor = Core.registry_.create();  
+
+  ModelComponent floor_model("../../assets/map3.gltf");
+  Core.level_.LoadMap("../../assets/leveldata/level3.json");
 
   TransformComponent floor_transform;
-  floor_transform.position_ = glm::vec3(0.f, -2.f, 0.f);
+  floor_transform.position_ = glm::vec3(0.f, 0.f, 0.f);
+  floor_transform.scale_ = glm::vec3(1.0f, 1.0f, 1.0f);
 
-  entt::entity floor_model = Core.registry_.create();
-  Core.registry_.emplace<ModelComponent>(floor_model, "../../assets/simple_plane.gltf");
-  Core.registry_.emplace<TransformComponent>(floor_model, floor_transform);
-  Core.registry_.emplace<ShaderComponent>(floor_model, shader);
+  Core.registry_.emplace<ModelComponent>(floor, floor_model);
+  Core.registry_.emplace<ShaderComponent>(floor, Core.default_shader_);
+  Core.registry_.emplace<TransformComponent>(floor, floor_transform);
 
-  glm::vec3 floor_scale = Core.registry_.get<ModelComponent>(floor_model).meshes_[0].transform_.scale_;
+  for (const MapLoader::Collider& collider : Core.level_.GetColliders()) {
+    TransformComponent static_transform;
+    static_transform.position_ = collider.position_;
+    static_transform.rotation_ = collider.rotation_;
 
-  btTransform ground_transform;
-  ground_transform.setIdentity();
-  ground_transform.setOrigin(btVector3(0.f, -2.f, 0.f));
+    if (collider.type_ == MapLoader::CollisionType::kBoxType) {
+      BoxColliderComponent static_collider(Core.physics_world, collider.size_);
+      entt::entity static_body = Core.registry_.create();
+      Core.registry_.emplace<BoxColliderComponent>(static_body, static_collider);
+      Core.registry_.emplace<TransformComponent>(static_body, static_transform);
+      Core.registry_.emplace<RigidBodyComponent>(static_body, Core.physics_world, static_collider.box_shape_.get(), static_transform, 0.f);
+    }
+  }
 
-  std::shared_ptr<btCollisionShape> ground_shape = std::make_shared<btBoxShape>(btVector3(floor_scale.x, floor_scale.y, floor_scale.z));
-  std::shared_ptr<btDefaultMotionState> motion_state = std::make_shared<btDefaultMotionState>(ground_transform);
-  std::shared_ptr<btRigidBody> ground_body = std::make_shared<btRigidBody>(btScalar(0.f), motion_state.get(), ground_shape.get());
+  ModelComponent cube_model("../../assets/grassblock.gltf"); 
+  BoxColliderComponent cube_collider(Core.physics_world, cube_model.meshes_[0].transform_.scale_ * 0.1f);
 
-  TransformComponent cube_transform;
-  cube_transform.position_ = glm::vec3(0.f, 10.f, 0.f);
+  for (int x = 0; x < 2; ++x) {
+    for (int y = 0; y < 1; ++y) {
+      for (int z = 0; z < 2; ++z) {
+        entt::entity cube = Core.registry_.create();
 
-  entt::entity physics_cube = Core.registry_.create();
-  Core.registry_.emplace<ModelComponent>(physics_cube, "../../assets/grassblock.gltf");
-  Core.registry_.emplace<TransformComponent>(physics_cube, cube_transform);
-  Core.registry_.emplace<ShaderComponent>(physics_cube, shader);
+        TransformComponent cube_transform;
+        cube_transform.position_ = glm::vec3((x * 0.2f) + 1.2f, (y * 0.2f) + 5.f, (z * 0.2f) - 3.f);
+        cube_transform.scale_ = glm::vec3(0.1f, 0.1f, 0.1f);
 
-  PhysicsDemo.physics_cube = physics_cube;
+        Core.registry_.emplace<TransformComponent>(cube, cube_transform);
+        Core.registry_.emplace<ModelComponent>(cube, cube_model);
+        Core.registry_.emplace<ShaderComponent>(cube, shader);
+        Core.registry_.emplace<BoxColliderComponent>(cube, cube_collider);
+        Core.registry_.emplace<RigidBodyComponent>(cube, Core.physics_world, cube_collider.box_shape_.get(), cube_transform, 0.3f);
+      }
+    }
+  }
 
-  btTransform physics_cube_transform;
-  physics_cube_transform.setIdentity();
-  physics_cube_transform.setOrigin(btVector3(0.f, 10.f, 0.f));
+  Core.ball_model_ = ModelComponent("../../assets/ball.gltf");
+  Core.sphere_component_ = SphereColliderComponent(Core.physics_world, 0.1f);
 
-  btScalar cube_mass(0.3f);
-
-  std::shared_ptr<btCollisionShape> box_shape = std::make_shared<btBoxShape>(btVector3(1.f, 1.f, 1.f));
-
-  btVector3 physics_cube_inertia;
-  box_shape->calculateLocalInertia(cube_mass, physics_cube_inertia);
-
-  std::shared_ptr<btDefaultMotionState> box_motion_state = std::make_shared<btDefaultMotionState>(physics_cube_transform);
-  std::shared_ptr<btRigidBody> box_body = std::make_shared<btRigidBody>(cube_mass, box_motion_state.get(), box_shape.get(), physics_cube_inertia);
-
-  PhysicsDemo.shapes_.push_back(ground_shape);
-  PhysicsDemo.shapes_.push_back(box_shape);
-
-  PhysicsDemo.motion_.push_back(motion_state);
-  PhysicsDemo.motion_.push_back(box_motion_state);
-
-  PhysicsDemo.bodies_.push_back(ground_body);
-  PhysicsDemo.bodies_.push_back(box_body);
-
-  Core.physics_world->addRigidBody(ground_body.get());
-  Core.physics_world->addRigidBody(box_body.get());
+  Core.camera_ = Core.registry_.create();
 
   CameraComponent camera_component{};
   camera_component.near_ = 0.01f;
   camera_component.far_ = 100.f;
   camera_component.fov_ = 90.f;
-  camera_component.position_ = glm::vec3(0.f, 2.f, 4.f);
+  camera_component.position_ = glm::vec3(0.f, 2.f, 10.f);
   camera_component.forward_ = glm::vec3(0.f, 0.f, -1.f);
   camera_component.up_ = glm::vec3(0.f, 1.f, 0.f);
 
   Core.registry_.emplace<InputComponent>(Core.camera_);
-  Core.registry_.emplace<FlyCameraComponent>(Core.camera_, 0.2f, 1.0f);
+  Core.registry_.emplace<FlyCameraComponent>(Core.camera_, 0.2f, 3.0f);
   Core.registry_.emplace<CameraComponent>(Core.camera_, camera_component);
 
   Input::SetCursorState(Input::CursorState::kCursorStateDisabled);
-
-  glEnable(GL_DEPTH_TEST);
-  glEnable(GL_CULL_FACE);
 }
 
-void Update_Physics(void) {
-  Core.physics_world->stepSimulation(1.f / 60.f, 10);
+void Update(void) {
+  Core.physics_world.UpdateWorld();
+  UpdatePhysicsSystem(Core.registry_);
 
-  TransformComponent& t = Core.registry_.get<TransformComponent>(PhysicsDemo.physics_cube);
-  btTransform transform;
-  PhysicsDemo.motion_[1]->getWorldTransform(transform);
-  t.position_.x = transform.getOrigin().getX();
-  t.position_.y = transform.getOrigin().getY();
-  t.position_.z = transform.getOrigin().getZ();
+  if (Input::IsKeyPressed(GLFW_KEY_SPACE)) {
+    CameraComponent camera = Core.registry_.get<CameraComponent>(Core.camera_);
+
+    entt::entity ball = Core.registry_.create();
+
+    TransformComponent ball_transform;
+    ball_transform.position_ = camera.position_;
+    ball_transform.scale_ = glm::vec3(0.1f);
+
+    btVector3 linear_velocity = GLM_To_BT_Vec3(camera.forward_) * 5.f;
+
+    RigidBodyComponent sphere_body(Core.physics_world, Core.sphere_component_.sphere_shape_.get(), ball_transform, 1.f);
+    sphere_body.rigid_body_->applyCentralImpulse(linear_velocity);
+
+    Core.registry_.emplace<TransformComponent>(ball, ball_transform);
+    Core.registry_.emplace<ModelComponent>(ball, Core.ball_model_);
+    Core.registry_.emplace<ShaderComponent>(ball, Core.default_shader_);
+    Core.registry_.emplace<SphereColliderComponent>(ball, Core.sphere_component_);
+    Core.registry_.emplace<RigidBodyComponent>(ball, sphere_body); 
+  }
+}
+
+void DrawDebug(void) {
+  CameraComponent camera = Core.registry_.get<CameraComponent>(Core.camera_);
+  DebugDrawer::DrawSquares(camera.projection_ * camera.view_);
+  DebugDrawer::DrawLines(camera.projection_ * camera.view_);
 }
 
 int main(void) {
-
   Application::SetTargetFPS(120);
+
+  DebugDrawer::InitializeDebugDrawer(); 
 
   Core.app_
     .AddSystem(Application::SystemType::kSystemStart, ImGui_Backend::Start)
+    .AddSystem(Application::SystemType::kSystemStart, Setup_PhysicsDemo)
     .AddSystem(Application::SystemType::kSystemUpdate, ImGui_Backend::NewFrame)
-    .AddSystem(Application::SystemType::kSystemStart, Setup_Physics)
-    .AddSystem(Application::SystemType::kSystemUpdate, Update_Physics)
+    .AddSystem(Application::SystemType::kSystemUpdate, Update)
     .AddSystem(Application::SystemType::kSystemUpdate, DrawUI)
     .AddSystem(Application::SystemType::kSystemUpdate, ClearBackgroundColor)
     .AddSystem(Application::SystemType::kSystemUpdate, [](){ 
       UpdateCameraComponents(Core.registry_, glm::vec2(Core.app_.GetWindowWidth(), Core.app_.GetWindowHeight())); 
     })
     .AddSystem(Application::SystemType::kSystemUpdate, [](){ UpdateMeshComponents(Core.registry_); })
+    .AddSystem(Application::SystemType::kSystemUpdate, DrawDebug)
     .AddSystem(Application::SystemType::kSystemUpdate, ImGui_Backend::Render)
     .AddSystem(Application::SystemType::kSystemEnd, [](){ ReleaseMeshResources(Core.registry_); })
     .AddSystem(Application::SystemType::kSystemEnd, ImGui_Backend::End)
