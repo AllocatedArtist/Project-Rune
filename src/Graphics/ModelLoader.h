@@ -22,6 +22,7 @@ struct PrimitiveData {
   int draw_mode_;
   int component_type_;
   std::shared_ptr<Texture> texture_;
+  glm::vec3 base_color_ = glm::vec3(0.f);
 };
 
 struct Primitive {
@@ -32,6 +33,7 @@ struct Primitive {
   int draw_mode_;
   int component_type_; //GL_UNSIGNED_SHORT or GL_UNSIGNED_INT?
   std::shared_ptr<Texture> texture_;
+  glm::vec3 base_color_ = glm::vec3(0.f);
 };
 
 struct Mesh {

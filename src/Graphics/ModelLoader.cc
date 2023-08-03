@@ -173,89 +173,110 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
     PLOGD << "------END------";
 
     const tinygltf::Material& material = model.materials[primitive.material];
-    assert(material.pbrMetallicRoughness.baseColorTexture.index > -1 && "No base texture");
-    const tinygltf::Texture& base_texture = model.textures[material.pbrMetallicRoughness.baseColorTexture.index];
-    const tinygltf::Image& image = model.images[base_texture.source]; 
- 
-    std::shared_ptr<Texture> current_texture;
-    if (auto image_it = texture_cache_.find(image.name); image_it != texture_cache_.end()) {
-      PLOGD << "Using texture cache for: " << image_it->first;
-      current_texture = image_it->second; 
-    } else {
-      if (model.textures.size() > 0) {
-        const tinygltf::Sampler& sampler = model.samplers[base_texture.sampler];
+    PLOGD << "BASE COLOR FACTOR SIZE: " << material.pbrMetallicRoughness.baseColorFactor.size();
 
-        unsigned int texture;
+    const std::vector<double> base_color = material.pbrMetallicRoughness.baseColorFactor;
 
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sampler.wrapS);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, sampler.wrapT);
-      
-        GLenum format = GL_RGB;
-        if (image.component == 1) 
-          format = GL_RED;
-        else if (image.component == 2) 
-          format = GL_RG;
-        else if (image.component == 3)
-          format = GL_RGB;
-        else if (image.component == 4) 
-          format = GL_RGBA;
-        else
-          PLOGD << "Unknown component: " << image.component;
-      
-        GLenum bits = GL_UNSIGNED_BYTE;
-        if (image.bits == 16)
-          bits = GL_UNSIGNED_SHORT;
-        else if (image.bits == 8)
-          bits = GL_UNSIGNED_BYTE;
-        else 
-          PLOGD << "UNKNOWN BITS: " << image.bits;
-      
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, format, bits, &image.image.at(0));
-        glGenerateMipmap(GL_TEXTURE_2D);
-        current_texture = std::make_shared<Texture>(texture);
-        texture_cache_.insert(std::make_pair(image.name, current_texture));
-      } 
+    
+    glm::vec4 material_base_color = glm::vec4(0.0);
+
+    if (base_color.size() >= 3) {
+      material_base_color = glm::vec4(base_color[0], base_color[1], base_color[2], 1.0f);
     }
 
-    primitive_data.texture_ = current_texture;
+    primitive_data.base_color_ = material_base_color;
+
+    //assert(material.pbrMetallicRoughness.baseColorTexture.index > -1 && "No base texture");
+    PLOG_DEBUG_IF(material.pbrMetallicRoughness.baseColorTexture.index == -1) << "No base texture found";
+
+    if (material.pbrMetallicRoughness.baseColorTexture.index > -1) {
+      const tinygltf::Texture& base_texture = model.textures[material.pbrMetallicRoughness.baseColorTexture.index];
+      const tinygltf::Image& image = model.images[base_texture.source]; 
+ 
+      std::shared_ptr<Texture> current_texture;
+      if (auto image_it = texture_cache_.find(image.name); image_it != texture_cache_.end()) {
+        PLOGD << "Using texture cache for: " << image_it->first;
+        current_texture = image_it->second; 
+      } else {
+        if (model.textures.size() > 0) {
+          const tinygltf::Sampler& sampler = model.samplers[base_texture.sampler];
+
+          unsigned int texture;
+
+          glGenTextures(1, &texture);
+          glBindTexture(GL_TEXTURE_2D, texture);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, sampler.wrapS);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, sampler.wrapT);
+      
+          GLenum format = GL_RGB;
+          if (image.component == 1) 
+            format = GL_RED;
+          else if (image.component == 2) 
+            format = GL_RG;
+          else if (image.component == 3)
+            format = GL_RGB;
+          else if (image.component == 4) 
+            format = GL_RGBA;
+          else
+            PLOGD << "Unknown component: " << image.component;
+      
+          GLenum bits = GL_UNSIGNED_BYTE;
+          if (image.bits == 16)
+            bits = GL_UNSIGNED_SHORT;
+          else if (image.bits == 8)
+            bits = GL_UNSIGNED_BYTE;
+          else 
+            PLOGD << "UNKNOWN BITS: " << image.bits;
+      
+          glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width, image.height, 0, format, bits, &image.image.at(0));
+          glGenerateMipmap(GL_TEXTURE_2D);
+          current_texture = std::make_shared<Texture>(texture);
+          texture_cache_.insert(std::make_pair(image.name, current_texture));
+        } 
+      }
+
+      primitive_data.texture_ = current_texture;
+    } else {
+      primitive_data.texture_ = nullptr;
+    }
+
     primitives.push_back(primitive_data); 
   }
 
   std::vector<Primitive> processed_primitives;
 
   for (PrimitiveData& data : primitives) {
-    Primitive primitive;
+      Primitive primitive;
 
-    primitive.vertex_array_ = std::make_shared<VertexArray>();
-    primitive.vertex_array_->Create();
-    primitive.vertex_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
-    primitive.index_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeIndex);
+      primitive.vertex_array_ = std::make_shared<VertexArray>();
+      primitive.vertex_array_->Create();
+      primitive.vertex_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
+      primitive.index_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeIndex);
 
-    primitive.vertex_buffer_->BufferData(data.position_.size() + data.texcoords_.size(), nullptr);
-    primitive.vertex_buffer_->BufferSubData(0, data.position_.size(), &data.position_[0]);
-    primitive.vertex_buffer_->BufferSubData(data.position_.size(), data.texcoords_.size(), &data.texcoords_[0]);
+      primitive.vertex_buffer_->BufferData(data.position_.size() + data.texcoords_.size(), nullptr);
+      primitive.vertex_buffer_->BufferSubData(0, data.position_.size(), &data.position_[0]);
+      primitive.vertex_buffer_->BufferSubData(data.position_.size(), data.texcoords_.size(), &data.texcoords_[0]);
 
-    primitive.index_buffer_->BufferData(data.indices_.size(), &data.indices_[0]);
+      primitive.index_buffer_->BufferData(data.indices_.size(), &data.indices_[0]);
 
-    primitive.vertex_array_->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(float) * 3, 0);
-    primitive.vertex_array_->VertexAttribute(1, VertexFormat::kVertexFormatFloat2, sizeof(float) * 2, (void*)(data.position_.size()));
+      primitive.vertex_array_->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(float) * 3, 0);
+      primitive.vertex_array_->VertexAttribute(1, VertexFormat::kVertexFormatFloat2, sizeof(float) * 2, (void*)(data.position_.size()));
 
-    primitive.vertex_array_->Unbind();
-    primitive.vertex_buffer_->Unbind();
-    primitive.index_buffer_->Unbind();
+      primitive.vertex_array_->Unbind();
+      primitive.vertex_buffer_->Unbind();
+      primitive.index_buffer_->Unbind();
 
-    primitive.draw_mode_ = data.draw_mode_; 
-    primitive.component_type_ = data.component_type_;
-    primitive.indices_count_ = data.indices_count_;
+      primitive.draw_mode_ = data.draw_mode_; 
+      primitive.component_type_ = data.component_type_;
+      primitive.indices_count_ = data.indices_count_;
 
-    primitive.texture_ = data.texture_;
+      primitive.base_color_ = data.base_color_;
+      primitive.texture_ = data.texture_;
 
-    processed_primitives.push_back(primitive);
-  }
+      processed_primitives.push_back(primitive);
+    }
 
   assert(processed_primitives.size() != 0 && "No mesh primitives processed!");
   return processed_primitives;
