@@ -5,6 +5,8 @@
 #include <glad/glad.h>
 #include <plog/Log.h>
 
+#include "BoxColliderComponent.h"
+#include "RigidBodyComponent.h"
 #include "CameraComponent.h"
 #include "MeshComponent.h"
 #include "ModelComponent.h"
@@ -12,6 +14,8 @@
 #include "TextureComponent.h"
 #include "TransformComponent.h"
 #include "InputComponent.h"
+
+#include "../Physics/PhysicsMath.h"
 
 #include "../Core/Time.h"
 #include "../Core/Input.h"
@@ -23,8 +27,7 @@ struct {
 void UpdateCameraComponents(entt::registry& registry, const glm::vec2& aspect_ratio) {
   auto view = registry.view<CameraComponent>();
 
-  for (auto entity : view) {
-    auto camera = registry.get<CameraComponent>(entity);
+  for (auto [entity, camera] : view.each()) {
     camera.aspect_ratio_ = aspect_ratio;
     camera.right_ = glm::normalize(glm::cross(camera.forward_, camera.up_));
 
@@ -103,6 +106,7 @@ void UpdateMeshComponents(entt::registry& registry) {
         local_matrix = local_matrix * glm::mat4(mesh.transform_.rotation_);
         local_matrix = glm::scale(local_matrix, mesh.transform_.scale_);
 
+        shader_component.shader_->SetUniform_Float3("fragBaseColor", primitive.base_color_.x, primitive.base_color_.y, primitive.base_color_.z);
         shader_component.shader_->SetUniform_Matrix("model", model_transform * local_matrix); 
         shader_component.shader_->SetUniform_Matrix("viewProjection", Global.current_view_projection_);
  
@@ -111,6 +115,9 @@ void UpdateMeshComponents(entt::registry& registry) {
         } else {
           glDrawArrays(primitive.draw_mode_, 0, 0);
         }
+
+        if (primitive.texture_ != nullptr)
+          primitive.texture_->Unbind();
 
         shader_component.shader_->Unbind();
         primitive.vertex_array_->Unbind();
@@ -158,8 +165,27 @@ void UpdateMeshComponents(entt::registry& registry) {
       glDrawArrays(mesh.draw_mode_, mesh.num_vertices_, 0);
     }
 
+    if (registry.any_of<TextureComponent>(entity)) {
+      auto texture = registry.get<TextureComponent>(entity);
+      if (texture.texture_ != nullptr) {
+        texture.texture_->Unbind();
+      }
+    }
+
     shader.shader_->Unbind();
     mesh.vertex_array_->Unbind();
+  }
+}
+
+void UpdatePhysicsSystem(entt::registry& registry) {
+  auto physics = registry.view<const RigidBodyComponent, TransformComponent>();
+
+  for (auto [entity, body, transform] : physics.each()) {
+    glm::vec3 scale = transform.scale_;
+    btTransform new_transform;
+    body.motion_state_->getWorldTransform(new_transform);
+
+    transform = BT_Transform_To_Component(new_transform, scale);
   }
 }
 

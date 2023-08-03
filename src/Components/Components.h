@@ -5,6 +5,7 @@
 #include <glm/vec2.hpp>
 
 void UpdateCameraComponents(entt::registry& registry, const glm::vec2& aspect_ratio);
+void UpdatePhysicsSystem(entt::registry& registry);
 void UpdateMeshComponents(entt::registry& registry);
 
 void ReleaseMeshResources(entt::registry& registry);
