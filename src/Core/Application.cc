@@ -100,6 +100,9 @@ Application::Application(const int& width, const int& height, const char* window
   
   glViewport(0, 0, width, height);
 
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+
   current_time_ = glfwGetTime();
 
   PLOG_DEBUG << "Initialized successfully";
