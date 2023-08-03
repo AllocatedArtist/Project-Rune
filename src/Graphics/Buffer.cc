@@ -13,11 +13,11 @@ Buffer::Buffer(const BufferType& type) : type_(type) {
   glGenBuffers(1, &id_);
   glBindBuffer(BufferTypeToGL(type), id_);
 
-  PLOGD << "Created buffer: " << (type == BufferType::kBufferTypeVertex ? " Vertex Buffer" : " Index Buffer"); 
+  PLOGV << "Created buffer: " << (type == BufferType::kBufferTypeVertex ? " Vertex Buffer" : " Index Buffer"); 
 }
 
 Buffer::~Buffer() {
-  PLOGD << "Deleted buffer: " << (type_ == BufferType::kBufferTypeVertex ? " Vertex Buffer" : " Index Buffer"); 
+  PLOGV << "Deleted buffer: " << (type_ == BufferType::kBufferTypeVertex ? " Vertex Buffer" : " Index Buffer"); 
   glDeleteBuffers(1, &id_);
 }
 
