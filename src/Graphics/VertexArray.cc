@@ -7,11 +7,11 @@ void VertexArray::Create() {
   glGenVertexArrays(1, &id_);
   glBindVertexArray(id_);
 
-  PLOGD << "Created vertex array";
+  PLOGV << "Created vertex array";
 }
 
 VertexArray::~VertexArray() {
-  PLOGD << "Destroyed vertex array";
+  PLOGV << "Destroyed vertex array";
   glDeleteVertexArrays(1, &id_);
 }
 

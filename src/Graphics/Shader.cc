@@ -11,9 +11,8 @@
 
 #include <glm/gtc/type_ptr.hpp>
 
-static std::tuple<std::string, std::string> LoadGLSL(const std::string_view& filename) {
-  std::ifstream glsl_file(filename.data());
-  std::string file_contents = std::string(std::istreambuf_iterator<char>(glsl_file), std::istreambuf_iterator<char>());
+static std::tuple<std::string, std::string> LoadGLSL_Source(const std::string& source) {
+  std::string file_contents = source; 
 
   size_t identifier_vertex = file_contents.find("#vertex");
   size_t identifier_fragment = file_contents.find("#fragment");
@@ -31,6 +30,12 @@ static std::tuple<std::string, std::string> LoadGLSL(const std::string_view& fil
   std::string fragment_source(fragment_begin, fragment_end);
 
   return std::make_tuple(vertex_source, fragment_source);
+}
+
+static std::tuple<std::string, std::string> LoadGLSL(const std::string_view& filename) {
+  std::ifstream glsl_file(filename.data());
+  std::string file_contents = std::string(std::istreambuf_iterator<char>(glsl_file), std::istreambuf_iterator<char>());
+  return LoadGLSL_Source(file_contents);
 }
 
 static bool CheckShaderCompileStatus(const unsigned int& shader) {
@@ -97,6 +102,40 @@ Shader::Shader(const char* filename) {
  
   PLOGD << "Created shader successfully";
 }
+
+void Shader::LoadSource(const char* glsl_source) {
+  program_id_ = glCreateProgram();
+  vertex_shader_id_ = glCreateShader(GL_VERTEX_SHADER); 
+  fragment_shader_id_ = glCreateShader(GL_FRAGMENT_SHADER);
+
+  auto [vertex_string, fragment_string] = LoadGLSL_Source(glsl_source); 
+  const char* vertex_cstr = vertex_string.c_str();
+  const char* fragment_cstr = fragment_string.c_str();
+
+  glShaderSource(vertex_shader_id_, 1, &vertex_cstr, nullptr);
+  glCompileShader(vertex_shader_id_);
+  PLOG_ERROR_IF(!CheckShaderCompileStatus(vertex_shader_id_)) << "Error loading vertex shader";
+  assert(CheckShaderCompileStatus(vertex_shader_id_));
+
+  glShaderSource(fragment_shader_id_, 1, &fragment_cstr, nullptr); 
+  glCompileShader(fragment_shader_id_);
+  PLOG_ERROR_IF(!CheckShaderCompileStatus(fragment_shader_id_)) << "Error loading fragment shader";
+  assert(CheckShaderCompileStatus(fragment_shader_id_));
+
+  glAttachShader(program_id_, vertex_shader_id_);
+  glAttachShader(program_id_, fragment_shader_id_);
+
+  glLinkProgram(program_id_);
+  PLOG_ERROR_IF(!CheckProgramLinkStatus(program_id_)) << "Error linking program";
+  assert(CheckProgramLinkStatus(program_id_));
+
+
+  glDeleteShader(vertex_shader_id_);
+  glDeleteShader(fragment_shader_id_);
+ 
+  PLOGD << "Created shader successfully";
+}
+
 
 Shader::~Shader() {
   PLOGD << "Deleted shader";

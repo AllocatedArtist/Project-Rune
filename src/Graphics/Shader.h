@@ -14,6 +14,8 @@ public:
   void Bind();
   void Unbind();
 
+  void LoadSource(const char* glsl_source);
+
   Shader& LoadUniform(const std::string& uniform);
 
   void SetUniform_Int(const std::string& uniform, const int& value);
