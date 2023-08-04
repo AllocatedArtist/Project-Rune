@@ -16,6 +16,7 @@
 
 struct PrimitiveData {
   std::vector<unsigned char> position_;
+  std::vector<unsigned char> normal_;
   std::vector<unsigned char> texcoords_;
   std::vector<unsigned char> indices_;
   int indices_count_;

@@ -157,10 +157,13 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
         primitive_data.position_ = std::vector<unsigned char>(data_begin, data_end);
       } else if (attribute.first == "TEXCOORD_0") {
         primitive_data.texcoords_ = std::vector<unsigned char>(data_begin, data_end);
+      } else if (attribute.first == "NORMAL") {
+        primitive_data.normal_ = std::vector<unsigned char>(data_begin, data_end);
       }
     }
     assert(!primitive_data.indices_.empty() && "NO INDICES COLLECTED");
     assert(!primitive_data.position_.empty() && "NO POSITION DATA COLLECTED");
+    assert(!primitive_data.normal_.empty() && "NO NORMAL DATA COLLECTED");
     assert(!primitive_data.texcoords_.empty() && "NO TEXCOORD DATA COLLECTED");
 
     PLOGD << "---PRIMITIVE---";
@@ -168,6 +171,7 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
     LogPrimitiveMode(primitive_data.draw_mode_);
     PLOGD << primitive_data.indices_count_;
     PLOGD << primitive_data.position_.size();
+    PLOGD << primitive_data.normal_.size();
     PLOGD << primitive_data.texcoords_.size();
     PLOGD << primitive_data.indices_.size();
     PLOGD << "------END------";
@@ -255,14 +259,17 @@ std::vector<Primitive> Model::ProcessMesh(const tinygltf::Mesh& mesh, const tiny
       primitive.vertex_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
       primitive.index_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeIndex);
 
-      primitive.vertex_buffer_->BufferData(data.position_.size() + data.texcoords_.size(), nullptr);
+      primitive.vertex_buffer_->BufferData(data.position_.size() + data.normal_.size() + data.texcoords_.size(), nullptr);
+
       primitive.vertex_buffer_->BufferSubData(0, data.position_.size(), &data.position_[0]);
-      primitive.vertex_buffer_->BufferSubData(data.position_.size(), data.texcoords_.size(), &data.texcoords_[0]);
+      primitive.vertex_buffer_->BufferSubData(data.position_.size(), data.normal_.size(), &data.normal_[0]);
+      primitive.vertex_buffer_->BufferSubData(data.position_.size() + data.normal_.size(), data.texcoords_.size(), &data.texcoords_[0]);
 
       primitive.index_buffer_->BufferData(data.indices_.size(), &data.indices_[0]);
 
       primitive.vertex_array_->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(float) * 3, 0);
-      primitive.vertex_array_->VertexAttribute(1, VertexFormat::kVertexFormatFloat2, sizeof(float) * 2, (void*)(data.position_.size()));
+      primitive.vertex_array_->VertexAttribute(1, VertexFormat::kVertexFormatFloat3, sizeof(float) * 3, (void*)(data.position_.size()));
+      primitive.vertex_array_->VertexAttribute(2, VertexFormat::kVertexFormatFloat2, sizeof(float) * 2, (void*)(data.position_.size() + data.normal_.size()));
 
       primitive.vertex_array_->Unbind();
       primitive.vertex_buffer_->Unbind();
