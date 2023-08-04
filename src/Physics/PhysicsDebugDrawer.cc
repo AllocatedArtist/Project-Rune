@@ -9,8 +9,6 @@ void PhysicsDebugDrawer::drawLine(const btVector3& from, const btVector3& to, co
 }
 
 void PhysicsDebugDrawer::drawContactPoint(const btVector3& PointOnB, const btVector3& normalOnB, btScalar distance, int lifeTime, const btVector3& color) {
-  DebugDrawer::CreateSquare(BT_To_GLM_Vec3(PointOnB), BT_To_GLM_Vec3(color), lifeTime);
-  DebugDrawer::CreateLine(BT_To_GLM_Vec3(PointOnB), BT_To_GLM_Vec3(normalOnB), BT_To_GLM_Vec3(color));
 }
 
 void PhysicsDebugDrawer::reportErrorWarning(const char* warningString) {
