@@ -20,6 +20,17 @@ public:
     glm::vec3 color_;
   }; 
 
+  struct LineVertex {
+    glm::vec3 position_;
+    glm::vec3 color_;
+  };
+
+  struct LineBatch {
+    std::shared_ptr<VertexArray> vertex_array_;
+    std::shared_ptr<Buffer> vertex_buffer_;
+    std::vector<LineVertex> line_vertices_;
+  };
+
   struct Square {
     glm::vec3 position_;
     glm::vec3 color_;
@@ -36,8 +47,10 @@ public:
   static void FlushLines();
   static void FlushSquares();
 private: 
-  static std::vector<Mesh> lines_;
   static std::vector<Square> squares_;
+
+  static int current_line_batch_;
+  static std::vector<LineBatch> line_batches_;
 
   static Mesh square_;
   static std::shared_ptr<Shader> shader_;

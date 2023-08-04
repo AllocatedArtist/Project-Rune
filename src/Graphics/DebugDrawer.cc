@@ -8,27 +8,35 @@
 
 #include "../Core/Time.h"
 
-std::vector<DebugDrawer::Mesh> DebugDrawer::lines_;
+
+int DebugDrawer::current_line_batch_ = 0;
+std::vector<DebugDrawer::LineBatch> DebugDrawer::line_batches_;
+
 std::vector<DebugDrawer::Square> DebugDrawer::squares_;
 
 DebugDrawer::Mesh DebugDrawer::square_;
 std::shared_ptr<Shader> DebugDrawer::shader_;
+
+constexpr int kMaxLineVertices = 20000 * 2;
 
 void DebugDrawer::InitializeDebugDrawer(void) {
  const char* glsl_source = {
     "#vertex\n" 
     "#version 330 core\n"
     "layout (location = 0) in vec3 aPos;\n"
+    "layout (location = 1) in vec3 aColor;\n"
     "uniform mat4 model;\n"
     "uniform mat4 viewProjection;\n"
+    "out vec3 color;\n"
     "void main() {\n"
+    "color = aColor;\n"
     "gl_Position = viewProjection * model * vec4(aPos, 1.0);\n"
     "}\n"
     "\n"
     "#fragment\n"
     "#version 330 core\n"
     "out vec4 fragColor;\n"
-    "uniform vec3 color;\n"
+    "in vec3 color;\n"
     "void main() {\n"
     "fragColor = vec4(color, 1.0);\n"
     "}\n"
@@ -36,74 +44,66 @@ void DebugDrawer::InitializeDebugDrawer(void) {
 
   shader_ = std::make_shared<Shader>();
   shader_->LoadSource(glsl_source);
-  shader_->LoadUniform("viewProjection").LoadUniform("model").LoadUniform("color");
+  shader_->LoadUniform("viewProjection").LoadUniform("model");
 
-  float square_vertices[] = {
-    0.2f, 0.2f, 0.0f,
-    0.2f, -0.2f, 0.0f,
-    -0.2f, -0.2f, 0.0f,
-    -0.2f, 0.2f, 0.0f,
-  };
+  std::shared_ptr<VertexArray> line_vertex_array = std::make_shared<VertexArray>();
+  line_vertex_array->Create();
 
-  unsigned short square_indices[] = {
-    0, 1, 2,
-    2, 3, 0,
-  };
+  std::shared_ptr<Buffer> line_vertex_buffer = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
+  line_vertex_buffer->BufferData(sizeof(DebugDrawer::LineVertex) * kMaxLineVertices, nullptr, BufferUsageType::kBufferDynamic);
 
-  square_.vertex_array_ = std::make_shared<VertexArray>();
-  square_.vertex_array_->Create();
+  line_vertex_array->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(DebugDrawer::LineVertex), (void*)offsetof(DebugDrawer::LineVertex, position_));
+  line_vertex_array->VertexAttribute(1, VertexFormat::kVertexFormatFloat3, sizeof(DebugDrawer::LineVertex), (void*)offsetof(DebugDrawer::LineVertex, color_));
 
-  square_.vertex_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
-  square_.index_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeIndex);
+  line_vertex_array->Unbind();
+  line_vertex_buffer->Unbind();
 
-  square_.vertex_buffer_->BufferData(sizeof(square_vertices), square_vertices);
-  square_.index_buffer_->BufferData(sizeof(square_indices), square_indices);
-
-  square_.vertex_array_->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(float) * 3, 0);
-
-  square_.vertex_array_->Unbind();
-  square_.vertex_buffer_->Unbind();
-  square_.index_buffer_->Unbind();
+  line_batches_.push_back(LineBatch { line_vertex_array, line_vertex_buffer });
 
   PLOGD << "Initialized Debug Drawer";
 }
 
 void DebugDrawer::CreateLine(const glm::vec3& from, const glm::vec3& to, const glm::vec3& color) {
-  float vertices[] = {
-    from.x, from.y, from.z,
-    to.x, to.y, to.z,
-  };
+  if (line_batches_[current_line_batch_].line_vertices_.size() >= kMaxLineVertices) {
+    std::shared_ptr<VertexArray> line_vertex_array = std::make_shared<VertexArray>();
+    line_vertex_array->Create();
 
-  Mesh line; 
-  line.vertex_array_ = std::make_shared<VertexArray>();
-  line.vertex_array_->Create();
+    std::shared_ptr<Buffer> line_vertex_buffer = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
+    line_vertex_buffer->BufferData(sizeof(DebugDrawer::LineVertex) * kMaxLineVertices, nullptr, BufferUsageType::kBufferDynamic);
 
-  line.vertex_buffer_ = std::make_shared<Buffer>(BufferType::kBufferTypeVertex);
-  line.vertex_buffer_->BufferData(sizeof(vertices), vertices);
+    line_vertex_array->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(DebugDrawer::LineVertex), (void*)offsetof(DebugDrawer::LineVertex, position_));
+    line_vertex_array->VertexAttribute(1, VertexFormat::kVertexFormatFloat3, sizeof(DebugDrawer::LineVertex), (void*)offsetof(DebugDrawer::LineVertex, color_));
 
-  line.vertex_array_->VertexAttribute(0, VertexFormat::kVertexFormatFloat3, sizeof(float) * 3, 0);
-
-  line.vertex_array_->Unbind();
-  line.vertex_buffer_->Unbind();
-
-  line.color_ = color;
-
-  lines_.push_back(line);
+    line_batches_.push_back(LineBatch { line_vertex_array, line_vertex_buffer });
+    ++current_line_batch_;
+  }
+  LineBatch& current_batch = line_batches_[current_line_batch_];
+  current_batch.line_vertices_.push_back(DebugDrawer::LineVertex { from, color });  
+  current_batch.line_vertices_.push_back(DebugDrawer::LineVertex { to, color });  
 }
 
-void DebugDrawer::DrawLines(const glm::mat4& view_projection) {
-  for (Mesh& line : lines_) {
-    line.vertex_array_->Bind();
-    shader_->Bind();
+void DebugDrawer::DrawLines(const glm::mat4& view_projection) { 
+  for (LineBatch& current_batch : line_batches_) {
+    current_batch.vertex_buffer_->Bind();
 
-    shader_->SetUniform_Float3("color", line.color_.x, line.color_.y, line.color_.z);
+    if (current_batch.line_vertices_.size() >= 2) {
+      current_batch.vertex_buffer_->BufferSubData(0, sizeof(LineVertex) * current_batch.line_vertices_.size(), &current_batch.line_vertices_[0]);
+    } else {
+      continue;
+    }
+
+    current_batch.vertex_buffer_->Unbind();
+
+    current_batch.vertex_array_->Bind();
+    shader_->Bind();  
+
+    shader_->SetUniform_Matrix("model", glm::translate(glm::mat4(1.f), glm::vec3(0.f)));
     shader_->SetUniform_Matrix("viewProjection", view_projection);
-    shader_->SetUniform_Matrix("model", glm::translate(glm::mat4(1.0), glm::vec3(0.f, 0.f, 0.f)));
 
-    glDrawArrays(GL_LINES, 0, 2);
+    glDrawArrays(GL_LINES, 0, current_batch.line_vertices_.size());
 
     shader_->Unbind();
-    line.vertex_array_->Unbind();
+    current_batch.vertex_array_->Unbind();
   }
 }
 
@@ -134,16 +134,13 @@ void DebugDrawer::DrawSquares(const glm::mat4& view_projection) {
 }
 
 void DebugDrawer::CreateSquare(const glm::vec3& position, const glm::vec3& color, const int& lifetime) {
-  squares_.push_back(Square { position, color, lifetime });
 }
 
 void DebugDrawer::FlushLines() {
-  for (Mesh& line : lines_) {
-    line.vertex_buffer_.reset();
-    line.vertex_array_.reset();
+  current_line_batch_ = 0;
+  for (LineBatch& batch : line_batches_) {
+    batch.line_vertices_.clear();
   }
-
-  lines_.clear();
 }
 
 void DebugDrawer::FlushSquares() {
