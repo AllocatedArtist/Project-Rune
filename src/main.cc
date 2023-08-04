@@ -201,7 +201,7 @@ void Setup_PhysicsDemo() {
         entt::entity cube = Core.registry_.create();
 
         TransformComponent cube_transform;
-        cube_transform.position_ = glm::vec3((x * 0.2f) + 1.2f, (y * 0.2f) + 5.f, (z * 0.2f) - 3.f);
+        cube_transform.position_ = glm::vec3((x * 0.2f) + 1.2f, (y * 0.2f) + 1.f, (z * 0.2f) - 3.f);
         cube_transform.scale_ = glm::vec3(0.1f, 0.1f, 0.1f);
 
         Core.registry_.emplace<TransformComponent>(cube, cube_transform);
