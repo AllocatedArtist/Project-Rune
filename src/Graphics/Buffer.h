@@ -6,6 +6,11 @@ enum class BufferType {
   kBufferTypeIndex,
 };
 
+enum class BufferUsageType {
+  kBufferStatic,
+  kBufferDynamic,
+};
+
 class Buffer {
 public:
   Buffer() = default;
@@ -15,7 +20,7 @@ public:
   void Bind();
   void Unbind();
 
-  void BufferData(const unsigned long long& size, const void* data);
+  void BufferData(const unsigned long long& size, const void* data, const BufferUsageType& usage = BufferUsageType::kBufferStatic);
   void BufferSubData(const unsigned long long& offset, const unsigned int& size, const void* data);
 private:
   unsigned int id_;

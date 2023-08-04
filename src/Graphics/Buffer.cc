@@ -29,8 +29,8 @@ void Buffer::Unbind() {
  glBindBuffer(BufferTypeToGL(type_), 0); 
 }
 
-void Buffer::BufferData(const unsigned long long& size, const void* data) {
- glBufferData(BufferTypeToGL(type_), size, data, GL_STATIC_DRAW);
+void Buffer::BufferData(const unsigned long long& size, const void* data, const BufferUsageType& usage) {
+ glBufferData(BufferTypeToGL(type_), size, data, (usage == BufferUsageType::kBufferStatic) ? GL_STATIC_DRAW : GL_DYNAMIC_DRAW);
 }
 
 void Buffer::BufferSubData(const unsigned long long& offset, const unsigned int& size, const void* data) {
