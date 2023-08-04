@@ -195,13 +195,13 @@ void Setup_PhysicsDemo() {
   ModelComponent cube_model("../../assets/grassblock.gltf"); 
   BoxColliderComponent cube_collider(Core.physics_world, cube_model.meshes_[0].transform_.scale_ * 0.1f);
 
-  for (int x = 0; x < 2; ++x) {
-    for (int y = 0; y < 1; ++y) {
-      for (int z = 0; z < 2; ++z) {
+  for (int x = 0; x < 5; ++x) {
+    for (int y = 0; y < 5; ++y) {
+      for (int z = 0; z < 4; ++z) {
         entt::entity cube = Core.registry_.create();
 
         TransformComponent cube_transform;
-        cube_transform.position_ = glm::vec3((x * 0.2f) + 1.2f, (y * 0.2f) + 1.f, (z * 0.2f) - 3.f);
+        cube_transform.position_ = glm::vec3((x * 0.2f) + 1.2f, (y * 0.2f) + 10.f, (z * 0.2f) - 3.f);
         cube_transform.scale_ = glm::vec3(0.1f, 0.1f, 0.1f);
 
         Core.registry_.emplace<TransformComponent>(cube, cube_transform);
