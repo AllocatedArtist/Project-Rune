@@ -6,13 +6,19 @@
 #include <memory>
 
 #include "../Components/TransformComponent.h"
-#include "../Components/TextureComponent.h"
-#include "../Components/MeshComponent.h"
 
-#include "Texture.h"
-#include "VertexArray.h"
-#include "Buffer.h"
-
+struct MaterialData {
+  bool use_texture_ = false;
+  int wrap_s_ = 0;
+  int wrap_t_ = 0;
+  int component_ = 0;
+  int bits_ = 0;
+  std::vector<unsigned char> texture_data_;
+  int texture_width_ = 0;
+  int texture_height_ = 0;
+  glm::vec3 base_color_ = glm::vec3(0.f);
+  std::string name_;
+};
 
 struct PrimitiveData {
   std::vector<unsigned char> position_;
@@ -22,24 +28,12 @@ struct PrimitiveData {
   int indices_count_;
   int draw_mode_;
   int component_type_;
-  std::shared_ptr<Texture> texture_;
-  glm::vec3 base_color_ = glm::vec3(0.f);
-};
-
-struct Primitive {
-  std::shared_ptr<VertexArray> vertex_array_;
-  std::shared_ptr<Buffer> vertex_buffer_;
-  std::shared_ptr<Buffer> index_buffer_;
-  int indices_count_;
-  int draw_mode_;
-  int component_type_; //GL_UNSIGNED_SHORT or GL_UNSIGNED_INT?
-  std::shared_ptr<Texture> texture_;
-  glm::vec3 base_color_ = glm::vec3(0.f);
+  MaterialData material_;
 };
 
 struct Mesh {
-  std::vector<Primitive> primitives_;
-  TransformComponent transform_; 
+  std::vector<PrimitiveData> primitives_;
+  TransformComponent local_transform_; 
 };
 
 class Model {
@@ -49,11 +43,9 @@ public:
   std::vector<Mesh>& GetMeshes();
 private:
   void ProcessNodes(const tinygltf::Node& node, const tinygltf::Model& model);
-  std::vector<Primitive> ProcessMesh(const tinygltf::Mesh& mesh, const tinygltf::Model& model); 
+  std::vector<PrimitiveData> ProcessMesh(const tinygltf::Mesh& mesh, const tinygltf::Model& model); 
 private:
   std::vector<Mesh> meshes_;
-private:
-  static std::map<std::string, std::shared_ptr<Texture>> texture_cache_;
 };
 
 #endif
