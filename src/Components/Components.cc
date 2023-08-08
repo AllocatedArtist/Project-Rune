@@ -10,8 +10,8 @@
 #include "CameraComponent.h"
 #include "MeshComponent.h"
 #include "ModelComponent.h"
-#include "ShaderComponent.h"
 #include "TextureComponent.h"
+#include "ShaderComponent.h"
 #include "TransformComponent.h"
 #include "InputComponent.h"
 
@@ -79,102 +79,54 @@ void UpdateCameraComponents(entt::registry& registry, const glm::vec2& aspect_ra
   }
 }
 
-void UpdateMeshComponents(entt::registry& registry) {
-  auto view = registry.view<const MeshComponent, ShaderComponent>();
-  auto model_view = registry.view<const ModelComponent, ShaderComponent>();
+void UpdateMeshComponents(entt::registry& registry, ResourceManager& resource) {
+  auto model_view = registry.view<ModelComponent, ShaderComponent>();
 
-  for (auto [entity, model_component, shader_component] : model_view.each()) {
-    for (const Mesh& mesh : model_component.meshes_) {
-      for (const Primitive& primitive : mesh.primitives_) {
-        primitive.vertex_array_->Bind();
-        shader_component.shader_->Bind();
+  for (auto [entity, model, shader] : model_view.each()) {
+    for (const entt::entity& mesh_handle : model.model_resource.mesh_handles_) {
+      MeshComponent mesh_component = resource.GetMeshFromHandle(mesh_handle);
+      MaterialComponent material_component = resource.GetMaterialFromHandle(mesh_handle);
+      TextureComponent* texture_component = resource.GetTextureFromMaterialHandle(material_component.texture_handle_);
 
-        if (primitive.texture_ != nullptr)
-          primitive.texture_->BindSlot(0);
+      TransformComponent local_transform = resource.GetLocalTransformFromMeshHandle(mesh_handle);
+
+      glm::mat4 local_transform_matrix(1.0);
+      local_transform_matrix = glm::translate(local_transform_matrix, local_transform.position_);
+      local_transform_matrix = local_transform_matrix * glm::mat4(local_transform.rotation_);
+      local_transform_matrix = glm::scale(local_transform_matrix, local_transform.scale_);
+
+      glm::mat4 global_transform_matrix(1.0);
+
+      TransformComponent* global_transform = registry.try_get<TransformComponent>(entity);
+      if (global_transform != nullptr)  {
+        global_transform_matrix = glm::translate(global_transform_matrix, global_transform->position_);
+        global_transform_matrix = global_transform_matrix * glm::mat4(global_transform->rotation_);
+        global_transform_matrix = glm::scale(global_transform_matrix, global_transform->scale_); 
+      }
+
+      mesh_component.vertex_array_->Bind();
+      shader.shader_->Bind();
+
+      shader.shader_->SetUniform_Matrix("model", global_transform_matrix * local_transform_matrix);
+      shader.shader_->SetUniform_Matrix("viewProjection", Global.current_view_projection_);
+
+      shader.shader_->SetUniform_Float3("fragBaseColor", material_component.base_color_.x, material_component.base_color_.y, material_component.base_color_.z);
+
+      if (texture_component != nullptr) {
+        texture_component->texture_->BindSlot(0); 
+      }
         
-        glm::mat4 model_transform(1.0);
+      glDrawElements(mesh_component.draw_mode_, mesh_component.num_indices_, mesh_component.index_type_, nullptr);
 
-        if (registry.any_of<TransformComponent>(entity)) {
-          auto transform = registry.get<TransformComponent>(entity);
-          model_transform = glm::translate(model_transform, transform.position_);
-          model_transform = model_transform * glm::mat4(transform.rotation_);
-          model_transform = glm::scale(model_transform, transform.scale_);
-        }
-
-        glm::mat4 local_matrix(1.0);
-        local_matrix = glm::translate(local_matrix, mesh.transform_.position_);
-        local_matrix = local_matrix * glm::mat4(mesh.transform_.rotation_);
-        local_matrix = glm::scale(local_matrix, mesh.transform_.scale_);
-
-        shader_component.shader_->SetUniform_Float3("fragBaseColor", primitive.base_color_.x, primitive.base_color_.y, primitive.base_color_.z);
-        shader_component.shader_->SetUniform_Matrix("model", model_transform * local_matrix); 
-        shader_component.shader_->SetUniform_Matrix("viewProjection", Global.current_view_projection_);
- 
-        if (primitive.index_buffer_ > 0) {
-          glDrawElements(primitive.draw_mode_, primitive.indices_count_, primitive.component_type_, 0);
-        } else {
-          glDrawArrays(primitive.draw_mode_, 0, 0);
-        }
-
-        if (primitive.texture_ != nullptr)
-          primitive.texture_->Unbind();
-
-        shader_component.shader_->Unbind();
-        primitive.vertex_array_->Unbind();
+      if (texture_component != nullptr) {
+        texture_component->texture_->Unbind();
       }
+
+      shader.shader_->Unbind();
+      mesh_component.vertex_array_->Unbind();
     }
   }
 
-  for (auto entity : view) {
-    auto mesh = registry.get<MeshComponent>(entity);
-    auto shader = registry.get<ShaderComponent>(entity);
-
-    mesh.vertex_array_->Bind();
-    shader.shader_->Bind();
-
-    if (registry.any_of<TextureComponent>(entity)) {
-      auto texture = registry.get<TextureComponent>(entity);
-      if (texture.texture_ != nullptr) {
-        texture.texture_->BindSlot(0);
-      }
-    }
-
-    glm::mat4 model_transform(1.0);
-
-    if (registry.any_of<TransformComponent>(entity)) {
-      auto transform = registry.get<TransformComponent>(entity);
-      model_transform = glm::translate(model_transform, transform.position_);
-      model_transform = model_transform * glm::mat4(transform.rotation_);
-      model_transform = glm::scale(model_transform, transform.scale_);
-    }
-
-    glm::mat4 local_matrix(1.0);
-    local_matrix = glm::translate(local_matrix, mesh.local_transform_.position_);
-    local_matrix = local_matrix * glm::mat4(mesh.local_transform_.rotation_);
-    local_matrix = glm::scale(local_matrix, mesh.local_transform_.scale_);
-
-
-    shader.shader_->SetUniform_Matrix("model", model_transform * local_matrix);
- 
-    shader.shader_->SetUniform_Matrix("viewProjection", Global.current_view_projection_);
- 
-    if (mesh.index_buffer_ > 0) {
-      glDrawElements(mesh.draw_mode_, mesh.num_indices_, mesh.index_type_, 0);
-    }
-    else {
-      glDrawArrays(mesh.draw_mode_, mesh.num_vertices_, 0);
-    }
-
-    if (registry.any_of<TextureComponent>(entity)) {
-      auto texture = registry.get<TextureComponent>(entity);
-      if (texture.texture_ != nullptr) {
-        texture.texture_->Unbind();
-      }
-    }
-
-    shader.shader_->Unbind();
-    mesh.vertex_array_->Unbind();
-  }
 }
 
 void UpdatePhysicsSystem(entt::registry& registry) {
@@ -200,10 +152,5 @@ void ReleaseMeshResources(entt::registry& registry) {
   auto shaders = registry.view<ShaderComponent>();
   for (auto [entity, shader] : shaders.each()) {
     shader.shader_.reset();
-  }
-
-  auto textures = registry.view<TextureComponent>();
-  for (auto [entity, texture] : textures.each()) {
-    texture.texture_.reset();
   }
 }
