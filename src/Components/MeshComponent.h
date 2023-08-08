@@ -20,8 +20,6 @@ struct MeshComponent {
 
   int index_type_ = kComponentType_UnsignedShort;  
   int draw_mode_ = kDrawMode_Triangle;
-
-  TransformComponent local_transform_;
 };
 
 #endif
