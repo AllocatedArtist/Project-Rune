@@ -89,7 +89,7 @@ void ClearBackgroundColor(void) {
 
 void Setup_PhysicsDemo() {  
 
-  Core.resource_manager_.LoadModelAsset("../../assets/better.gltf");
+  Core.resource_manager_.LoadModelAsset("../../assets/map3.gltf");
   Core.resource_manager_.LoadShaderAsset("../../assets/shader.glsl");
 
   ShaderResource shader_resource = Core.resource_manager_.GetShaderResource("../../assets/shader.glsl");
@@ -107,7 +107,7 @@ void Setup_PhysicsDemo() {
   TransformComponent transform{};
   transform.position_ = glm::vec3(0.f, 0.f, 0.f);
 
-  Core.registry_.emplace<ModelComponent>(minecraft_pp, Core.resource_manager_.GetModelResource("../../assets/better.gltf"));
+  Core.registry_.emplace<ModelComponent>(minecraft_pp, Core.resource_manager_.GetModelResource("../../assets/map3.gltf"));
   Core.registry_.emplace<TransformComponent>(minecraft_pp, transform);
   Core.registry_.emplace<ShaderComponent>(minecraft_pp, shader_component);
 
